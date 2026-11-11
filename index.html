@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f3efe3" />
+  <title>OmegaMind 152M — C++17 AVX2 Inference Telemetry</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root{
+      --paper:#f3efe3; --paper-deep:#eae4d5; --card:#fbf9f1; --ink:#29291f;
+      --muted:#777365; --line:#d8d1c1; --blue:#7894a6; --blue-pale:#e4ebed;
+      --sage:#7f8e75; --sage-pale:#e8ece2; --clay:#b9795b; --clay-pale:#f1e5dc; --gold:#a5874b;
+      --shadow:0 18px 50px rgba(62,55,39,.07);
+      --serif:'Newsreader', Georgia, serif; --sans:'DM Sans', Arial, sans-serif; --mono:'DM Mono', monospace;
+      --max:1240px;
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
+    button,input{font:inherit}
+    button{cursor:pointer}
+    ::selection{background:#d9e2de;color:var(--ink)}
+    ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:#cfc7b4;border-radius:3px}
+    :focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+    .wrap{width:min(calc(100% - 48px),var(--max));margin-inline:auto}
+    .eyebrow{display:inline-flex;align-items:center;gap:9px;color:var(--muted);font:500 10px/1.2 var(--mono);letter-spacing:.15em;text-transform:uppercase}
+    .eyebrow:before{content:"";width:19px;height:1px;background:var(--clay)}
+
+    /* header */
+    .site-header{height:70px;display:flex;align-items:center;border-bottom:1px solid rgba(119,115,101,.22);background:rgba(243,239,227,.94);position:sticky;top:0;z-index:30;backdrop-filter:blur(12px)}
+    .nav{display:flex;align-items:center;justify-content:space-between;gap:24px}
+    .brand{display:flex;align-items:center;gap:11px}
+    .brand-mark{width:30px;height:30px;border:1px solid var(--ink);border-radius:50%;display:grid;place-items:center;position:relative}
+    .brand-mark:before{content:"";width:11px;height:11px;border:1px solid var(--clay);border-radius:50%;position:absolute;transform:translate(4px,-3px)}
+    .brand-mark span{font:500 10px var(--mono);position:relative;left:-2px;top:2px}
+    .brand-name{display:block;font:600 14px var(--mono);letter-spacing:.04em}
+    .brand-sub{display:block;font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-top:1px}
+    .reset-btn{border:1px solid var(--ink);background:transparent;padding:9px 14px;border-radius:3px;font:500 11px var(--mono);letter-spacing:.04em;transition:background .2s,color .2s}
+    .reset-btn:hover{background:var(--ink);color:var(--card)}
+    .reset-btn:disabled{opacity:.45;cursor:wait}
+
+    /* telemetry */
+    .telemetry{padding:34px 0 22px}
+    .tm-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:16px}
+    .tm-card{background:var(--card);border:1px solid var(--line);border-radius:3px;padding:12px 14px;min-width:0;box-shadow:0 5px 16px rgba(43,40,31,.03)}
+    .tm-label{display:flex;justify-content:space-between;gap:6px;font:500 9px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+    .tm-value{font:500 20px/1.2 var(--serif);margin-top:6px;letter-spacing:-.01em;overflow-wrap:anywhere}
+    .tm-sub{font:10px var(--mono);color:var(--muted);margin-top:3px}
+    .tm-bar{height:5px;background:#e3ddcc;border-radius:3px;margin-top:11px;overflow:hidden}
+    .tm-bar i{display:block;height:100%;width:0;transition:width .25s}
+    .c-sage{color:var(--sage)}.c-gold{color:var(--gold)}.c-blue{color:#5d7b8f}.c-clay{color:var(--clay)}
+    #bar-cpu{background:var(--gold)}#bar-ram{background:var(--clay)}
+
+    /* chat + sampling */
+    .workspace{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:16px;padding-bottom:70px;align-items:start}
+    .chat-panel{background:var(--card);border:1px solid #d4cdbc;box-shadow:var(--shadow);display:flex;flex-direction:column}
+    .chat-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line)}
+    .chat-head strong{font:500 19px var(--serif)}
+    .engine-state{font:10px var(--mono);color:var(--muted);display:flex;align-items:center;gap:8px}
+    .engine-state:before{content:"";width:7px;height:7px;background:#b6a98e;border-radius:50%}
+    .engine-state.online:before{background:var(--sage)}
+    .engine-state.busy:before{background:var(--clay);animation:blink .9s infinite alternate}
+    @keyframes blink{to{opacity:.3}}
+    .chat-log{height:clamp(380px,60vh,620px);overflow-y:auto;padding:22px 20px;display:flex;flex-direction:column;gap:18px}
+    .notice{align-self:center;max-width:560px;text-align:center;color:var(--muted);font-size:12px;line-height:1.8;padding:12px 16px;border:1px dashed var(--line);background:#f7f4eb}
+    .notice b{color:var(--ink);font-weight:600}
+    .notice.ok{color:#5b6b52}
+    .message{max-width:88%;display:flex;flex-direction:column;gap:4px;align-self:flex-start;min-width:0}
+    .message.user{align-self:flex-end;align-items:flex-end}
+    .message-label{font:9px var(--mono);text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+    .message-body{padding:11px 14px;background:#f8f6ef;border:1px solid #e0dacb;border-radius:3px 12px 12px 12px;font-size:13px;line-height:1.75;overflow-wrap:anywhere;max-width:100%}
+    .message.user .message-body{background:var(--blue-pale);border-color:#d1dfe4;border-radius:12px 3px 12px 12px;white-space:pre-wrap}
+    .message.error .message-body{background:var(--clay-pale);border-color:#e5c8b8;color:#784b38}
+    .wait{color:var(--muted);animation:blink .9s infinite alternate}
+    .md>:first-child{margin-top:0}.md>:last-child{margin-bottom:0}
+    .md p{margin:0 0 .7em}
+    .md ul,.md ol{margin:.4em 0 .8em;padding-left:1.3em}
+    .md h1,.md h2,.md h3{font:500 17px var(--serif);margin:.9em 0 .4em}
+    .md pre{background:#efebdd;border:1px solid var(--line);border-radius:3px;padding:10px 12px;overflow-x:auto;margin:.6em 0;max-width:100%}
+    .md code{font:12px var(--mono);color:#4a6577;background:#eee8d8;padding:1px 4px;border-radius:2px}
+    .md pre code{background:none;padding:0;color:var(--ink)}
+    .msg-stats{display:flex;flex-wrap:wrap;gap:4px 16px;font:10px var(--mono);color:var(--muted);padding:2px 2px 0}
+    .msg-stats b{color:#4f5145;font-weight:500}
+    .chat-form{border-top:1px solid var(--line);padding:15px 17px 17px}
+    .prompt-box{display:flex;gap:9px}
+    .prompt-box input{flex:1;min-width:0;border:1px solid var(--line);border-radius:3px;padding:13px;background:#fffdf7;color:var(--ink);font-size:13px;outline:none}
+    .prompt-box input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(120,148,166,.12)}
+    .send-button{border:1px solid var(--ink);background:var(--ink);color:#fbf9f1;padding:0 22px;border-radius:3px;font-size:12px;font-weight:600;min-width:100px;transition:background .2s}
+    .send-button:hover{background:#4b4b40}.send-button:disabled{opacity:.45;cursor:wait}
+
+    .side{background:var(--card);border:1px solid var(--line);padding:20px;display:flex;flex-direction:column;gap:18px}
+    .side h2{font:500 20px var(--serif);margin:0}
+    .sc-top{display:flex;justify-content:space-between;font:10px var(--mono);color:var(--muted);margin-bottom:5px}
+    .sc-top b{color:#4f5145;font-weight:500}
+    .side input[type=range]{width:100%;accent-color:var(--blue)}
+    .facts{border-top:1px solid var(--line);padding-top:6px}
+    .fact{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:11px;color:#676457}
+    .fact strong{font:10px var(--mono);font-weight:500;color:#45463a;text-align:right}
+
+    /* walkthrough gif */
+    .gif-section{background:var(--paper-deep);border-top:1px solid var(--line);padding:76px 0 84px}
+    .gif-head{display:flex;justify-content:space-between;align-items:flex-end;gap:36px;margin-bottom:30px}
+    .gif-head h2{font:400 clamp(32px,4vw,48px)/1.05 var(--serif);letter-spacing:-.035em;margin:14px 0 0;max-width:620px}
+    .gif-head p{max-width:350px;color:var(--muted);font-size:13px;line-height:1.75;margin:0 0 3px}
+    .gif-shell{border:1px solid var(--line);background:var(--card);padding:9px;box-shadow:var(--shadow)}
+    .gif-shell img{display:block;width:100%;height:auto;border:1px solid var(--line);background:#f1efe8}
+    .gif-cap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:11px 8px 3px;color:var(--muted);font-size:11px}
+    .gif-cap a{border-bottom:1px solid #b6a98e}
+    .gif-section[hidden]{display:none}
+    footer{border-top:1px solid var(--line);padding:20px 0 23px;color:var(--muted);font:10px var(--mono)}
+    .footer-row{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+
+    @media(max-width:1100px){.tm-grid{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:900px){.workspace{grid-template-columns:1fr}.gif-head{flex-direction:column;align-items:flex-start}}
+    @media(max-width:620px){
+      .wrap{width:min(calc(100% - 32px),var(--max))}
+      .site-header{height:62px}.brand-sub{display:none}
+      .telemetry{padding-top:24px}.tm-grid{grid-template-columns:1fr 1fr}
+      .chat-log{padding:16px 13px}.message{max-width:94%}
+      .prompt-box{flex-direction:column}.send-button{height:43px}
+      .gif-section{padding:56px 0 60px}.footer-row{flex-direction:column;gap:8px}
+    }
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important}}
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="wrap nav">
+      <div class="brand">
+        <span class="brand-mark"><span>Ω</span></span>
+        <span><span class="brand-name">OMEGAMIND</span><span class="brand-sub">152.8M · C++17 AVX2/FMA</span></span>
+      </div>
+      <button class="reset-btn" id="reset-btn" type="button">Reset KV Cache</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Live telemetry -->
+    <section class="telemetry">
+      <div class="wrap">
+        <span class="eyebrow">Live inference telemetry</span>
+        <div class="tm-grid">
+          <div class="tm-card"><div class="tm-label">1st Token (TTFT)</div><div id="stat-ttft" class="tm-value c-sage">— ms</div></div>
+          <div class="tm-card"><div class="tm-label">Output Time</div><div id="stat-total-time" class="tm-value c-gold">— ms</div></div>
+          <div class="tm-card"><div class="tm-label">Avg Token Speed</div><div id="stat-speed" class="tm-value c-blue">— tok/s</div><div id="stat-ms-tok" class="tm-sub">— ms/tok</div></div>
+          <div class="tm-card"><div class="tm-label"><span>CPU Usage</span><span id="stat-cpu" class="c-gold">0.0%</span></div><div class="tm-bar"><i id="bar-cpu"></i></div></div>
+          <div class="tm-card"><div class="tm-label"><span>RAM Usage</span><span id="stat-ram" class="c-clay">0.0%</span></div><div class="tm-bar"><i id="bar-ram"></i></div><div id="stat-ram-gb" class="tm-sub">— / — GB</div></div>
+          <div class="tm-card"><div class="tm-label">KV Cache Pos</div><div id="stat-kv" class="tm-value c-blue">0 / 1024</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Chat + sampling -->
+    <div class="wrap workspace">
+      <section class="chat-panel" aria-label="Chat with OmegaMind">
+        <div class="chat-head"><strong>Talk to OmegaMind</strong><span class="engine-state" id="engine-state">Checking engine</span></div>
+        <div id="chat-box" class="chat-log" aria-live="polite">
+          <div class="notice"><b>OmegaMind (152.8M)</b> is live. Every response tracks TTFT, total output time, average speed per token, CPU % and RAM % in real time.</div>
+        </div>
+        <form class="chat-form" id="chat-form" autocomplete="off">
+          <div class="prompt-box">
+            <input id="user-input" type="text" placeholder="Ask OmegaMind anything (e.g., Write a Python function to reverse a string)..." aria-label="Message to OmegaMind" autocomplete="off" />
+            <button id="send-btn" class="send-button" type="submit">Send</button>
+          </div>
+        </form>
+      </section>
+
+      <aside class="side" aria-label="Sampling controls">
+        <h2>Sampling controls</h2>
+        <div><div class="sc-top"><span>Temperature</span><b id="val-temp">0.25</b></div><input id="inp-temp" type="range" min="0.05" max="1.0" step="0.05" value="0.25" /></div>
+        <div><div class="sc-top"><span>Top-K</span><b id="val-topk">8</b></div><input id="inp-topk" type="range" min="1" max="50" step="1" value="8" /></div>
+        <div><div class="sc-top"><span>Top-P (Nucleus)</span><b id="val-topp">0.85</b></div><input id="inp-topp" type="range" min="0.10" max="1.0" step="0.05" value="0.85" /></div>
+        <div><div class="sc-top"><span>Repetition Penalty</span><b id="val-rep">1.18</b></div><input id="inp-rep" type="range" min="1.00" max="1.40" step="0.02" value="1.18" /></div>
+        <div><div class="sc-top"><span>Max Output Tokens</span><b id="val-max">256</b></div><input id="inp-max" type="range" min="64" max="512" step="32" value="256" /></div>
+        <div class="facts">
+          <div class="fact"><span>Repo</span><strong>NOT-OMEGA/OmegaMind</strong></div>
+          <div class="fact"><span>Context</span><strong>1024 tokens</strong></div>
+          <div class="fact"><span>SIMD</span><strong>AVX2 + FMA3 + OpenMP</strong></div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Walkthrough GIF (hides itself if the file is not found) -->
+    <section class="gif-section" id="walkthrough">
+      <div class="wrap">
+        <div class="gif-head">
+          <div><span class="eyebrow">Walkthrough</span><h2>See how one question moves through OmegaMind.</h2></div>
+          <p>A short animated tour of the full path: prompt, tokenizer, CPU inference engine and the streamed answer.</p>
+        </div>
+        <div class="gif-shell">
+          <img src="OmegaMind-walkthrough.gif" alt="Animated walkthrough of an OmegaMind request, from prompt to streamed answer" loading="lazy" onerror="document.getElementById('walkthrough').hidden=true" />
+          <div class="gif-cap"><span>OmegaMind walkthrough</span><a href="OmegaMind-walkthrough.gif" target="_blank" rel="noopener">Open full size</a></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer><div class="wrap footer-row"><span>OMEGAMIND · A CPU-FIRST LANGUAGE MODEL</span><span>© <span id="year"></span> · Sumeet Khatri</span></div></footer>
+
+  <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const sessionId = "sess_" + Math.random().toString(36).substring(2, 10);
+      let isFirstTurn = true;
+      let busy = false;
+      $("year").textContent = new Date().getFullYear();
+
+      // ---- Sampling slider labels ----
+      [["temp", "val-temp"], ["topk", "val-topk"], ["topp", "val-topp"], ["rep", "val-rep"], ["max", "val-max"]].forEach(([k, v]) => {
+        $("inp-" + k).addEventListener("input", (e) => { $(v).textContent = e.target.value; });
+      });
+
+      const setState = (cls, label) => { const el = $("engine-state"); el.className = ("engine-state " + cls).trim(); el.textContent = label; };
+
+      // ---- Dashboard (same fields as the original index.html) ----
+      function updateDashboard(d) {
+        if (!d || typeof d !== "object") return;
+        const set = (id, t) => { $(id).textContent = t; };
+        const bar = (id, p) => { $(id).style.width = Math.max(0, Math.min(Number(p) || 0, 100)) + "%"; };
+        if (d.ttft_ms !== undefined) set("stat-ttft", `${d.ttft_ms} ms`);
+        if (d.total_ms !== undefined) set("stat-total-time", `${d.total_ms} ms (${(d.total_ms / 1000).toFixed(2)}s)`);
+        if (d.tok_s !== undefined) set("stat-speed", `${d.tok_s} tok/s`);
+        if (d.ms_per_tok !== undefined) set("stat-ms-tok", `${d.ms_per_tok} ms / token`);
+        if (d.cpu_pct !== undefined) { set("stat-cpu", `${d.cpu_pct}%`); bar("bar-cpu", d.cpu_pct); }
+        if (d.ram_pct !== undefined) { set("stat-ram", `${d.ram_pct}%`); bar("bar-ram", d.ram_pct); }
+        if (d.ram_used_gb !== undefined && d.ram_total_gb !== undefined) set("stat-ram-gb", `${d.ram_used_gb} / ${d.ram_total_gb} GB`);
+        if (d.kv_pos !== undefined) set("stat-kv", `${d.kv_pos} / 1024`);
+      }
+
+      // Background poll CPU% and RAM% every 2 seconds
+      setInterval(async () => {
+        try {
+          const r = await fetch("/api/metrics");
+          if (r.ok) {
+            const m = await r.json();
+            updateDashboard(m);
+            if (!busy) setState("online", "Engine available");
+          } else if (!busy) setState("", "Engine unavailable");
+        } catch (_) { if (!busy) setState("", "Engine unavailable"); }
+      }, 2000);
+
+      function el(tag, cls, text) {
+        const n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (text !== undefined) n.textContent = text;
+        return n;
+      }
+
+      function createMessagePair(userText) {
+        const box = $("chat-box");
+        const u = el("div", "message user");
+        u.append(el("div", "message-label", "You"), el("div", "message-body", userText));
+        const b = el("div", "message assistant");
+        const bBubble = el("div", "message-body md");
+        const wait = el("span", "wait", "Prefilling KV cache...");
+        bBubble.appendChild(wait);
+        const bStats = el("div", "msg-stats");
+        bStats.appendChild(el("span", "", "⏳ Measuring telemetry..."));
+        b.append(el("div", "message-label", "OmegaMind"), bBubble, bStats);
+        box.append(u, b);
+        box.scrollTop = box.scrollHeight;
+        return { bBubble, bStats };
+      }
+
+      function addStat(parent, label, value, cls) {
+        const s = el("span");
+        s.append(label + " ");
+        const b = el("b", cls || "", value);
+        s.appendChild(b);
+        parent.appendChild(s);
+      }
+
+      function renderStats(bStats, d) {
+        bStats.replaceChildren();
+        addStat(bStats, "TTFT", `${d.ttft_ms} ms`, "c-sage");
+        addStat(bStats, "Total time", `${d.total_ms} ms (${(d.total_ms / 1000).toFixed(2)}s)`, "c-gold");
+        addStat(bStats, "Avg speed", `${d.tok_s} tok/s (${d.ms_per_tok} ms/tok)`, "c-blue");
+        addStat(bStats, "Tokens", `${d.tokens || 0}`);
+        addStat(bStats, "CPU", `${d.cpu_pct}%`, "c-gold");
+        addStat(bStats, "RAM", `${d.ram_pct}%`, "c-clay");
+      }
+
+      function showError(bBubble, msg) {
+        bBubble.textContent = msg;
+        bBubble.parentElement.classList.add("error");
+      }
+
+      $("chat-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const input = $("user-input"), btn = $("send-btn");
+        const text = input.value.trim();
+        if (!text || busy) return;
+
+        input.value = "";
+        busy = true;
+        btn.disabled = true;
+        setState("busy", "Generating");
+        const { bBubble, bStats } = createMessagePair(text);
+
+        const payload = {
+          session_id: sessionId,
+          message: text,
+          max_tokens: parseInt($("inp-max").value),
+          temperature: parseFloat($("inp-temp").value),
+          top_k: parseInt($("inp-topk").value),
+          top_p: parseFloat($("inp-topp").value),
+          repetition_penalty: parseFloat($("inp-rep").value),
+          is_first_turn: isFirstTurn
+        };
+        isFirstTurn = false;
+
+        let rawMarkdown = "";
+        const chat = $("chat-box");
+        try {
+          const res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
+
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const lines = buffer.split("\n\n");
+            buffer = lines.pop();
+
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              let data;
+              try { data = JSON.parse(line.slice(6)); } catch (_) { continue; }
+
+              if (data.error) { showError(bBubble, "Error: " + data.error); break; }
+              if (data.token) {
+                rawMarkdown += data.token;
+                if (window.marked) bBubble.innerHTML = marked.parse(rawMarkdown);
+                else { bBubble.style.whiteSpace = "pre-wrap"; bBubble.textContent = rawMarkdown; }
+                chat.scrollTop = chat.scrollHeight;
+              }
+
+              updateDashboard(data);
+
+              if (data.ttft_ms !== undefined && data.total_ms !== undefined) renderStats(bStats, data);
+            }
+          }
+        } catch (err) {
+          showError(bBubble, "Connection error: " + err.message);
+        } finally {
+          busy = false;
+          btn.disabled = false;
+          setState("online", "Engine available");
+          input.focus();
+        }
+      });
+
+      $("reset-btn").addEventListener("click", async () => {
+        if (busy) return;
+        const btn = $("reset-btn");
+        btn.disabled = true;
+        try {
+          await fetch("/api/reset", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: sessionId })
+          });
+          isFirstTurn = true;
+          $("stat-kv").textContent = "0 / 1024";
+          const box = $("chat-box");
+          box.replaceChildren();
+          const n = el("div", "notice ok");
+          n.append(el("b", "", "KV cache cleared."), " Ready for a new conversation.");
+          box.appendChild(n);
+        } catch (err) {
+          const n = el("div", "notice", "Could not reach the server to reset the KV cache.");
+          $("chat-box").appendChild(n);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
