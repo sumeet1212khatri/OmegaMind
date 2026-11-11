@@ -4,7 +4,7 @@ OmegaMind is an educational walkthrough of how a text request moves through a sm
 
 ## Animated walkthrough
 
-![OmegaMind animated walkthrough](assets/omegamind-walkthrough.gif)
+[OmegaMind animated walkthrough](./OmegaMind-walkthrough.gif)
 
 > **Note:** This is a guided concept demonstration, not a live model execution. The displayed token IDs, next-token scores, timings, CPU activity, and sample answer are illustrative. They should not be read as measured benchmark results.
 
